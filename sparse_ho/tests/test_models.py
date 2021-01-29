@@ -106,8 +106,9 @@ def test_val_grad(model_name, criterion_name, algo):
     model = models[model_name]
     val, grad = criterion.get_val_grad(
         model, X, y, log_alpha, algo.get_beta_jac_v, tol=tol)
+    import ipdb; ipdb.set_trace()
     np.testing.assert_allclose(
-        dict_vals_cvxpy[model_name, criterion_name], val, rtol=1e-5, atol=1e-5)
+        dict_vals_cvxpy[model_name, criterion_name], val, rtol=1e-4, atol=1e-4)
     np.testing.assert_allclose(
         dict_grads_cvxpy[model_name, criterion_name], grad,
         rtol=1e-5, atol=1e-5)
@@ -169,6 +170,6 @@ if __name__ == "__main__":
     print("#" * 30)
     for algo in list_algos:
         print("#" * 20)
-        test_val_grad("svr", "MSE", algo)
-        test_check_grad_sparse_ho('lasso', 'MSE', algo)
-        test_beta_jac('lasso')
+        test_val_grad("ssvr", "MSE", algo)
+        test_check_grad_sparse_ho('svr', 'MSE', algo)
+        test_beta_jac('ssvr')
