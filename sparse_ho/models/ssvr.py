@@ -159,9 +159,8 @@ class SimplexSVR(BaseModel):
                 _update_beta_jac_bcd_aux(
                     X, y, epsilon, beta, dbeta, dual_var,
                     ddual_var, L, C, j1, j2, sign, compute_jac)
-
             else:
-                if j >= (2 * n_samples) and j < (2 * n_samples + n_features):
+                if j < (2 * n_samples + n_features):
                     F = beta[j - (2 * n_samples)]
                     dual_var_old = dual_var[j]
                     zj = dual_var[j] - F
@@ -318,14 +317,14 @@ class SimplexSVR(BaseModel):
     def _update_only_jac(X, y, dual_var, dbeta, ddual_var,
                          L, hyperparam, sign_beta):
         n_samples, n_features = X.shape
+        length_dual = dual_var.shape[0]
         C = hyperparam[0]
         epsilon = hyperparam[1]
-        gen_supp = np.zeros(dual_var.shape[0])
+        gen_supp = np.zeros(length_dual)
         bool_temp = dual_var[0:(2 * n_samples + n_features)] == 0.0
         gen_supp[0:(2 * n_samples + n_features)][bool_temp] = -1.0
         gen_supp[0:(2 * n_samples)][dual_var[0:(2 * n_samples)] == C] = 1.0
-        iter = np.arange(0, (2 * n_samples + n_features + 1))[gen_supp == 0.0]
-        for j in iter:
+        for j in np.arange(0, length_dual)[gen_supp == 0.0]:
             if j < (2 * n_samples):
                 if j < n_samples:
                     j1, j2, sign = j, j, 1
@@ -336,7 +335,7 @@ class SimplexSVR(BaseModel):
                     X, epsilon, dbeta, ddual_var, dual_var[j2], L,
                     C, j1, j2, sign)
             else:
-                if j >= (2 * n_samples) and j < (2 * n_samples + n_features):
+                if j < (2 * n_samples + n_features):
                     dF = dbeta[j - (2 * n_samples)]
                     ddual_var_old = ddual_var[j, :].copy()
                     dzj = ddual_var[j, :] - dF
