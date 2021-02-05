@@ -104,10 +104,10 @@ class ElasticNet(BaseModel):
         for j in (np.arange(sign_beta.shape[0] - 1, -1, -1)):
             grad[0] -= (v_t_jac[j]) * alphas[0] * \
                 sign_beta[j] / L[j] / (1 + (alphas[1] / L[j]))
-            grad[1] -= (v_t_jac[j]) * (alphas[1] / L[j] * beta[j]
-                ) / (1 + (alphas[1] / L[j]))
+            grad[1] -= (v_t_jac[j]) * (alphas[1] / L[j] * beta[j])
+            grad[1] /= (1 + (alphas[1] / L[j]))
             v_t_jac[j] *= (1 / (1 + alphas[1] / L[j])) * \
-                    np.abs(np.sign(beta[j]))
+                np.abs(np.sign(beta[j]))
             v_t_jac -= v_t_jac[j] / (L[j] * n_samples) * X[:, j] @ X
 
         return grad

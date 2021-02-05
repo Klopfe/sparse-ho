@@ -106,7 +106,6 @@ def test_val_grad(model_name, criterion_name, algo):
     model = models[model_name]
     val, grad = criterion.get_val_grad(
         model, X, y, log_alpha, algo.get_beta_jac_v, tol=tol)
-    import ipdb; ipdb.set_trace()
     np.testing.assert_allclose(
         dict_vals_cvxpy[model_name, criterion_name], val, rtol=1e-4, atol=1e-4)
     np.testing.assert_allclose(
