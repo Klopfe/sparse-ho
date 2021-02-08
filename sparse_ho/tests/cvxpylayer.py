@@ -294,9 +294,9 @@ def ssvr_cvxpy(X, y, hyperparam, idx_train, idx_val):
     # solve problem
     layer = CvxpyLayer(problem, parameters=[C_cp, epsilon_cp],
                        variables=[beta_cp])
-    hyperparam_th = torch.tensor(hyperparam, requires_grad=True)
+    hyperparam_th = torch.tensor(hyperparam, requires_grad=True, dtype=torch.double)
     beta_, = layer(hyperparam_th[0], hyperparam_th[1],
-                   solver_args={'eps': 1e-8,  'max_iters': 2000})
+                   solver_args={'eps': 1e-15,  'max_iters': 20000})
     # get test loss and it's gradient
     test_loss = (Xtest @ beta_ - ytest).pow(2).mean()
     test_loss.backward()
