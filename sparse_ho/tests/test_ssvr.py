@@ -2,9 +2,8 @@ import numpy as np
 from scipy.sparse import csc_matrix
 from sklearn import svm
 from celer.datasets import make_correlated_data
-
-from cvxopt import matrix
-from cvxopt import solvers
+from sparse_ho.tests.cvxpylayer import ssvr_cvxpy
+import cvxpy as cp
 from sparse_ho.models import SimplexSVR as SSVR
 from sparse_ho.algo.forward import get_beta_jac_iterdiff
 from sparse_ho.algo.implicit_forward import get_beta_jac_fast_iterdiff
@@ -17,7 +16,7 @@ from sparse_ho.utils import Monitor
 
 from sparse_ho.optimizers import LineSearch
 
-n_samples = 10
+n_samples = 500
 n_features = 10
 
 
@@ -27,12 +26,12 @@ X_s = csc_matrix(X)
 beta[beta < 0] = 0
 beta /= np.sum(beta)
 y = X @ beta
-idx_train = np.arange(0, 5)
-idx_val = np.arange(5, 10)
+idx_train = np.arange(0, 250)
+idx_val = np.arange(250, 500)
 
 tol = 1e-16
 
-C = 0.01
+C = 0.00000000001
 log_C = np.log(C)
 epsilon = 0.1
 log_epsilon = np.log(0.1)
@@ -94,13 +93,17 @@ def test_val_grad():
     val_imp, grad_imp = criterion.get_val_grad(
         model, X, y, np.array([log_C, log_epsilon]),
         algo.get_beta_jac_v, tol=tol)
+    
+    val_cvxpy, grad_cvxpy = ssvr_cvxpy(X, y, np.array([C, epsilon]), idx_train, idx_val)
+    grad_cvxpy *= np.array([C, epsilon])
+    import ipdb; ipdb.set_trace()
     assert np.allclose(val_fwd, val_imp_fwd)
     assert np.allclose(grad_fwd, grad_imp_fwd)
-    # np.testing.assert_allclose(val_imp_fwd, val_imp)
+    np.testing.assert_allclose(val_imp_fwd, val_cvxpy)
     assert np.allclose(val_imp_fwd, val_imp_fwd_custom)
     # for the implcit the conjugate grad does not converge
     # hence the rtol=1e-2
-    # np.testing.assert_allclose(grad_imp_fwd, grad_imp, atol=1e-3)
+    np.testing.assert_allclose(grad_imp_fwd, grad_cvxpy)
     assert np.allclose(grad_imp_fwd, grad_imp_fwd_custom)
 
 
@@ -154,56 +157,29 @@ def test_grad_search():
 
 
 def primal_eps_SVR_constrained(X, y, cost=1, eps=0.5):
+    n_samples_train, n_features = X.shape
 
-    l, n = X.shape
-    cost = cost
-# quadratic term matrix
-    Q = np.zeros(((2*l+n), (2*l+n)))
-    Q[:n, :n] = np.identity(n)
-    Q = matrix(Q)
-# Linear term vector
+    # set up variables and parameters
+    beta_cp = cp.Variable(n_features)
+    xi_cp = cp.Variable(n_samples_train)
+    xi_star_cp = cp.Variable(n_samples_train)
 
-    L = np.zeros((2*l + n))
-    L[n:(2*l+n)] = np.repeat(cost, 2 * l)
-    L = matrix(L)
-# Matrix of constraints (inequality)
-    G = np.zeros(((4*l+n+1), (2*l+n)))
-    G[:l, :n] = -X
-    G[:l, n:(2*l+n)] = np.concatenate(
-                        (-np.eye(l, l), np.zeros((l, l))), axis=1)
-
-    G[l:(2*l), :n] = X
-    G[l:(2*l), n:(2*l+n)] = np.concatenate(
-                            (np.zeros((l, l)), -np.eye(l, l)), axis=1)
-
-    G[(2*l):(3*l), n:(l+n)] = -np.eye(l, l)
-    G[(3*l):(4*l), (l+n):(2*l+n)] = -np.eye(l, l)
-
-    G[(4*l+1):(4*l+n+1), :n] = -np.eye(n, n)
-    G = matrix(G)
-# Matrix of constraints (equality)
-    A = np.repeat(0.0, (2*l+n))
-    A[:n] = np.repeat(1.0, n)
-    A = matrix(A, (1, (2*l+n)))
-
-# vector of inequality constraints
-
-    h = np.hstack((-y + eps, y + eps, np.repeat(0, 2*l), 0, np.repeat(0, n)))
-    h = matrix(h)
-    b = matrix(1.0)
-
-    solvers.options['show_progress'] = False
-    solvers.options['feastol'] = 1e-12
-    solvers.options['reltol'] = 1e-12
-    solvers.options['abstol'] = 1e-12
-
-    sol = solvers.qp(Q, L, G, h, A, b)
-    solution = sol['x'][:n]
-
-    return np.asarray(solution).flatten()
+    # set up objective
+    loss = cp.sum_squares(beta_cp) / 2
+    reg = cost * cp.sum(xi_cp + xi_star_cp)
+    objective = loss + reg
+    # define constraints
+    constraints = [y - X @ beta_cp <= eps + xi_cp,
+                   X @ beta_cp - y <= eps + xi_star_cp,
+                   xi_cp >= 0.0, xi_star_cp >= 0.0,
+                   cp.sum(beta_cp) == 1, beta_cp >= 0.0]
+    # define problem
+    problem = cp.Problem(cp.Minimize(objective), constraints)
+    problem.solve(max_iter=100000, eps_abs=1e-12, eps_rel=1e-12, verbose=True)
+    return beta_cp.value
 
 
 if __name__ == '__main__':
     # test_beta_jac()
-    # test_val_grad()
-    test_grad_search()
+    test_val_grad()
+    # test_grad_search()
