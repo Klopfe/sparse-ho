@@ -434,8 +434,11 @@ class SimplexSVR(BaseModel):
         alpha = self.dual_var[0:n_samples] - \
             self.dual_var[n_samples:(2 * n_samples)]
         gamma = self.dual_var[(2 * n_samples):(2 * n_samples + n_features)]
-        mask0 = gamma != 0
-        full_supp = np.logical_and(alpha != 0, np.abs(alpha) != C)
+        mask0 = np.logical_not(np.isclose(gamma, 0))
+        full_supp = np.logical_not(
+            np.logical_or(
+                np.isclose(alpha, 0),
+                np.isclose(np.abs(alpha), C)))
         sub_id = np.zeros((mask0.sum(), n_features))
         sub_id[:, mask0] = 1.0
         hessian = np.concatenate((X[full_supp, :],
@@ -455,7 +458,7 @@ class SimplexSVR(BaseModel):
             self.dual_var[n_samples:(2 * n_samples)]
         n_features = X.shape[1]
         gamma = self.dual_var[(2 * n_samples):(2 * n_samples + n_features)]
-        mask0 = gamma != 0
+        mask0 = np.logical_not(np.isclose(gamma, 0))
         full_supp = np.logical_and(alpha != 0, np.abs(alpha) != C)
         maskC = np.abs(alpha) == C
         sub_id = np.zeros((mask0.sum(), n_features))
@@ -475,9 +478,12 @@ class SimplexSVR(BaseModel):
         C = np.exp(log_hyperparam[0])
         alpha = self.dual_var[0:n_samples] -\
             self.dual_var[n_samples:(2 * n_samples)]
-        full_supp = np.logical_and(alpha != 0, np.abs(alpha) != C)
-        mask0 = self.dual_var[(2 * n_samples):
-                              (2 * n_samples + n_features)] != 0
+        full_supp = np.logical_not(
+            np.logical_or(
+                np.isclose(alpha, 0),
+                np.isclose(np.abs(alpha), C)))
+        mask0 = np.logical_not(np.isclose(self.dual_var[(2 * n_samples):
+                              (2 * n_samples + n_features)], 0))
         return v[np.hstack((full_supp, mask0, True))]
 
     def proj_hyperparam(self, X, y, log_hyperparam):
@@ -494,7 +500,10 @@ class SimplexSVR(BaseModel):
         dmu = ddual_var[-1, 0]
         maskC = np.abs(alpha) == C
 
-        full_supp = np.logical_and(alpha != 0, np.abs(alpha) != C)
+        full_supp = np.logical_not(
+            np.logical_or(
+                np.isclose(alpha, 0),
+                np.isclose(np.abs(alpha), C)))
 
         vecX = dalpha[full_supp].T @ Xs[full_supp, :]
         vecX += dgamma + np.repeat(dmu, n_features)
