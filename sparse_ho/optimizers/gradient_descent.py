@@ -47,6 +47,7 @@ class GradientDescent(BaseOptimizer):
                 self.step_size = self.p_grad0 / (
                     np.linalg.norm(grad_outer) + 1e-12)
             log_alphak -= self.step_size * grad_outer
+            log_alphak = proj_hyperparam(log_alphak)
 
             if self.verbose:
                 print(

@@ -253,12 +253,17 @@ class SimplexSVR(BaseModel):
         n_samples = X.shape[0]
         obj_prim = 0.5 * norm(beta) ** 2 + hyperparam[0] * np.sum(np.maximum(
             np.abs(X @ beta - y) - hyperparam[1], 0))
+        return obj_prim
+    
+    @staticmethod
+    def _get_dobj(dual_var, X, beta, hyperparam, y=None):
+        n_samples = X.shape[0]
         obj_dual = 0.5 * beta.T @ beta
         obj_dual += hyperparam[1] * np.sum(dual_var[0:(2 * n_samples)])
         obj_dual -= np.sum(y * (dual_var[0:n_samples] -
                                 dual_var[n_samples:(2 * n_samples)]))
         obj_dual -= dual_var[-1]
-        return (obj_dual + obj_prim)
+        return -obj_dual
 
     @staticmethod
     def _get_jac(dbeta, mask):

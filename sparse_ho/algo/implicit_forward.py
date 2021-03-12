@@ -36,7 +36,7 @@ class ImplicitForward():
             jac0=quantity_to_warm_start,
             # tol_jac=self.tol_jac,
             tol_jac=tol, tol=tol, niter_jac=self.n_iter_jac, model=model,
-            max_iter=self.max_iter, verbose=self.verbose)
+            max_iter=max_iter, verbose=self.verbose)
         return mask, dense, jac
 
     def get_beta_jac_v(
@@ -48,7 +48,7 @@ class ImplicitForward():
             jac0=quantity_to_warm_start,
             # tol_jac=self.tol_jac,
             tol_jac=self.tol_jac, tol=tol, niter_jac=self.n_iter_jac,
-            model=model, max_iter=self.max_iter, verbose=self.verbose,
+            model=model, max_iter=max_iter, verbose=self.verbose,
             use_stop_crit=self.use_stop_crit)
         jac_v = model.get_jac_v(X, y, mask, dense, jac, get_v)
         if full_jac_v:
@@ -64,7 +64,7 @@ def get_beta_jac_fast_iterdiff(
 
     mask, dense, _ = get_beta_jac_iterdiff(
         X, y, log_alpha, mask0=mask0, dense0=dense0, jac0=jac0, tol=tol,
-        max_iter=max_iter, compute_jac=False, model=model, verbose=verbose,
+        max_iter=model.max_iter, compute_jac=False, model=model, verbose=verbose,
         use_stop_crit=use_stop_crit)
     dbeta0_new = model._init_dbeta0(mask, mask0, jac0)
     reduce_alpha = model._reduce_alpha(np.exp(log_alpha), mask)

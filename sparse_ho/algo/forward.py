@@ -121,7 +121,6 @@ def get_beta_jac_iterdiff(
     if save_iterates:
         list_beta = []
         list_jac = []
-
     for i in range(max_iter):
         if verbose:
             print("%i -st iteration over %i" % (i, max_iter))
@@ -144,7 +143,7 @@ def get_beta_jac_iterdiff(
         if use_stop_crit and i % gap_freq == 0 and i > 0:
             if hasattr(model, "_get_dobj"):
                 dobj = model._get_dobj(dual_var, X, beta, alpha, y)
-                dual_gap = pobj[-1] - dobj
+                dual_gap = np.abs(pobj[-1] - dobj)
                 if verbose:
                     print("dual gap %.2e" % dual_gap)
                 assert dual_gap >= -100 * np.finfo('float').eps

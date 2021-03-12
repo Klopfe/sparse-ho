@@ -44,7 +44,7 @@ class HeldOutMSE(BaseCriterion):
         # TODO add test for get val
         mask, dense, _ = get_beta_jac_iterdiff(
             X[self.idx_train], y[self.idx_train], log_alpha, model, tol=tol,
-            compute_jac=False)
+            compute_jac=False, max_iter=model.max_iter)
         value_outer = self.get_val_outer(
             X[self.idx_val, :], y[self.idx_val], mask, dense)
         if monitor is not None:
@@ -65,7 +65,7 @@ class HeldOutMSE(BaseCriterion):
             X_train, y_train, log_alpha, model,
             get_v, mask0=self.mask0, dense0=self.dense0,
             quantity_to_warm_start=self.quantity_to_warm_start,
-            max_iter=max_iter, tol=tol, compute_jac=compute_jac,
+            max_iter=model.max_iter, tol=tol, compute_jac=compute_jac,
             full_jac_v=True)
 
         # assert isinstance(quantity_to_warm_start, np.ndarray)
@@ -73,7 +73,7 @@ class HeldOutMSE(BaseCriterion):
         self.mask0 = mask
         self.dense0 = dense
         self.quantity_to_warm_start = quantity_to_warm_start
-        val = self.get_val_outer(X_val, y_val, mask, dense)
+        val = self.get_val_outer(X_val, y_val, mask, dense) 
         if monitor is not None:
             monitor(val, grad, mask, dense, alpha=np.exp(log_alpha))
         return val, grad
@@ -228,6 +228,7 @@ class HeldOutSmoothedHinge(BaseCriterion):
         return val, grad
 
     def get_val(self, model, X, y, log_alpha, tol=1e-3):
+
         mask, dense, _ = get_beta_jac_iterdiff(
             X, y, log_alpha, model,  # TODO max_iter
             max_iter=model.max_iter, tol=tol, compute_jac=False)

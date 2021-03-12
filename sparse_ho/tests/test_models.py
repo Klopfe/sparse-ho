@@ -24,7 +24,7 @@ from sparse_ho.tests.common import (
 list_algos = [
     Forward(),
     ImplicitForward(tol_jac=1e-16, n_iter_jac=5000),
-    Implicit()
+    # Implicit()
     # Backward()  # XXX to fix
 ]
 
@@ -110,7 +110,7 @@ def test_val_grad(model_name, criterion_name, algo):
         dict_vals_cvxpy[model_name, criterion_name], val, rtol=1e-4, atol=1e-4)
     np.testing.assert_allclose(
         dict_grads_cvxpy[model_name, criterion_name], grad,
-        rtol=1e-5, atol=1e-5)
+        rtol=1e-4, atol=1e-4)
 
 
 @pytest.mark.parametrize('model_name,criterion', list_model_crit)
@@ -170,5 +170,5 @@ if __name__ == "__main__":
     for algo in list_algos:
         print("#" * 20)
         test_val_grad("ssvr", "MSE", algo)
-        test_check_grad_sparse_ho('svr', 'MSE', algo)
+        test_check_grad_sparse_ho('ssvr', 'MSE', algo)
         test_beta_jac('ssvr')
