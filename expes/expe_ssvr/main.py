@@ -35,7 +35,7 @@ else:
     b0 = b0 / np.sum(b0)
     y = np.dot(X,b0)
     np.random.seed(0)
-    y += np.random.randn(y.shape[0]) * 0.5
+    y += np.random.randn(y.shape[0]) * 0.1
 # custom = LinearRegression(fit_intercept=False)
 # custom.fit(X, y)
 
@@ -50,9 +50,9 @@ idx_val = np.arange(0, n_samples)
 
 tol = 1e-6
 
+algorithms = ['grad_search']
+# 
 # algorithms = ['grad_search', 'grid_search10', 'grid_search']
-
-algorithms = ['grad_search', 'grid_search10', 'grid_search']
 
 max_evals = 25
 print("Starting path computation...")
@@ -64,8 +64,8 @@ for algorithm in algorithms:
 
     model = SimplexSVR()
     criterion = HeldOutMSE(idx_train, idx_val)
-    C0 = 2e-5
-    epsilon0 = 1
+    C0 = 0.001
+    epsilon0 = 0.51
     monitor = Monitor()
     # cross_val_criterion = CrossVal(criterion, cv=kf)
     algo = ImplicitForward()
@@ -73,7 +73,7 @@ for algorithm in algorithms:
     if algorithm.startswith('grad_search'):
         if algorithm == 'grad_search':
             optimizer = GradientDescent(
-                n_outer=max_evals, tol=tol, verbose=True, p_grad0=1.3)
+                n_outer=max_evals, tol=tol, verbose=True, p_grad0=0.44)
         else:
             optimizer = LineSearch(n_outer=50, verbose=True, tol=tol)
         grad_search(
@@ -85,8 +85,8 @@ for algorithm in algorithms:
             n_alphas = 5
         else:
             n_alphas = 30
-        Cs = np.geomspace(2e-7, 2e4, n_alphas)
-        epsilons = np.geomspace(2e-7, 2e1, n_alphas)
+        Cs = np.geomspace(2e-5, 2e4, n_alphas)
+        epsilons = np.geomspace(2e-3, 1, n_alphas)
 
         grid_alphas = [i for i in itertools.product(Cs, epsilons)]
 
@@ -100,7 +100,6 @@ for algorithm in algorithms:
             method=algorithm, size_space=2)
     objs = np.array(monitor.objs)
     alphas = np.log(np.array(monitor.alphas))
-    import ipdb; ipdb.set_trace()
     np.save("results/%s_log_alphas_%s_ssvr" % (dataset, algorithm), alphas)
     np.save("results/%s_objs_%s_ssvr" % (dataset, algorithm), objs)
     print('%s finished' % algorithm)
