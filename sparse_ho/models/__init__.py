@@ -5,11 +5,13 @@ from sparse_ho.models.svr import SVR
 from sparse_ho.models.ssvr import SimplexSVR
 from sparse_ho.models.wlasso import WeightedLasso
 from sparse_ho.models.logreg import SparseLogreg
+from sparse_ho.models.nuSVR import SimplexNuSVR
 
 __all__ = ['Lasso',
            'ElasticNet',
            'SVM',
            'SVR',
            'SimplexSVR',
+           'SimplexNuSVR'
            'WeightedLasso',
            'SparseLogreg']

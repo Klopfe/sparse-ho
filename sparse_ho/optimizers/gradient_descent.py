@@ -48,7 +48,7 @@ class GradientDescent(BaseOptimizer):
                     np.linalg.norm(grad_outer) + 1e-12)
             log_alphak -= self.step_size * grad_outer
             log_alphak = proj_hyperparam(log_alphak)
-
+            print(np.exp(log_alphak))
             if self.verbose:
                 print(
                     "Iteration %i/%i ||" % (i+1, self.n_outer) +

@@ -104,11 +104,17 @@ def get_beta_jac_iterdiff(
         alphas = np.ones(n_features) * alpha
     ############################################
     # warm start for beta
-    beta, dual_var = model._init_beta_dual_var(X, y, mask0, dense0)
+    if hasattr(model, 'cd_type'):
+        beta, dual_var = model._init_beta_dual_var(X, y, alpha, mask0, dense0)
+        dbeta, ddual_var = model._init_dbeta_ddual_var(
+            X, y, alpha, mask0=mask0, dense0=dense0, jac0=jac0, compute_jac=compute_jac)
+    else:
+        beta, dual_var = model._init_beta_dual_var(X, y, mask0, dense0)
+            # warm start for dbeta
+        dbeta, ddual_var = model._init_dbeta_ddual_var(
+            X, y, mask0=mask0, dense0=dense0, jac0=jac0, compute_jac=compute_jac)
     ############################################
-    # warm start for dbeta
-    dbeta, ddual_var = model._init_dbeta_ddual_var(
-        X, y, mask0=mask0, dense0=dense0, jac0=jac0, compute_jac=compute_jac)
+
 
     # store the values of the objective
     pobj0 = model._get_pobj0(dual_var, np.zeros(X.shape[1]), alphas, y)
@@ -121,47 +127,52 @@ def get_beta_jac_iterdiff(
     if save_iterates:
         list_beta = []
         list_jac = []
-    for i in range(max_iter):
-        if verbose:
-            print("%i -st iteration over %i" % (i, max_iter))
-        if is_sparse:
-            model._update_beta_jac_bcd_sparse(
-                X.data, X.indptr, X.indices, y, n_samples, n_features, beta,
-                dbeta, dual_var, ddual_var, alphas, L,
-                compute_jac=compute_jac)
-        else:
-            model._update_beta_jac_bcd(
-                X, y, beta, dbeta, dual_var, ddual_var, alphas,
-                L, compute_jac=compute_jac)
-
-        pobj.append(model._get_pobj(dual_var, X, beta, alphas, y))
-
-        if i > 1:
-            if verbose:
-                print("relative decrease = ", (pobj[-2] - pobj[-1]) / pobj0)
-
-        if use_stop_crit and i % gap_freq == 0 and i > 0:
-            if hasattr(model, "_get_dobj"):
-                dobj = model._get_dobj(dual_var, X, beta, alpha, y)
-                dual_gap = np.abs(pobj[-1] - dobj)
-                if verbose:
-                    print("dual gap %.2e" % dual_gap)
-                assert dual_gap >= -100 * np.finfo('float').eps
-                if verbose:
-                    print("gap %.2e" % dual_gap)
-                if dual_gap < pobj0 * tol:
-                    break
-            else:
-                if (pobj[-2] - pobj[-1] <= pobj0 * tol):
-                    break
-        if return_all:
-            list_beta.append(beta.copy())
-        if save_iterates:
-            list_beta.append(beta.copy())
-            list_jac.append(dbeta.copy())
+    if hasattr(model, "cd_type"):
+        model._update_beta_jac_bcd(
+            X, y, beta, dbeta, dual_var, ddual_var, alphas,
+            L, compute_jac=compute_jac)
     else:
-        if verbose:
-            print('did not converge !')
+        for i in range(max_iter):
+            if verbose:
+                print("%i -st iteration over %i" % (i, max_iter))
+            if is_sparse:
+                model._update_beta_jac_bcd_sparse(
+                    X.data, X.indptr, X.indices, y, n_samples, n_features, beta,
+                    dbeta, dual_var, ddual_var, alphas, L,
+                    compute_jac=compute_jac)
+            else:
+                model._update_beta_jac_bcd(
+                    X, y, beta, dbeta, dual_var, ddual_var, alphas,
+                    L, compute_jac=compute_jac)
+
+            pobj.append(model._get_pobj(dual_var, X, beta, alphas, y))
+
+            if i > 1:
+                if verbose:
+                    print("relative decrease = ", (pobj[-2] - pobj[-1]) / pobj0)
+
+            if use_stop_crit and i % gap_freq == 0 and i > 0:
+                if hasattr(model, "_get_dobj"):
+                    dobj = model._get_dobj(dual_var, X, beta, alpha, y)
+                    dual_gap = np.abs(pobj[-1] - dobj)
+                    if verbose:
+                        print("dual gap %.2e" % dual_gap)
+                    assert dual_gap >= -100 * np.finfo('float').eps
+                    if verbose:
+                        print("gap %.2e" % dual_gap)
+                    if dual_gap < pobj0 * tol:
+                        break
+                else:
+                    if (pobj[-2] - pobj[-1] <= pobj0 * tol):
+                        break
+            if return_all:
+                list_beta.append(beta.copy())
+            if save_iterates:
+                list_beta.append(beta.copy())
+                list_jac.append(dbeta.copy())
+        else:
+            if verbose:
+                print('did not converge !')
     mask = beta != 0
     dense = beta[mask]
     jac = model._get_jac(dbeta, mask)
