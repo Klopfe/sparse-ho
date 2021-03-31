@@ -10,13 +10,13 @@ from sparse_ho.utils import proj_box_svm, ind_box
 
 @njit
 def _compute_jac_aux(X, epsilon, dbeta, ddual_var, zj, L, C, j1, j2, sign):
-    dF = sign * np.array([np.sum(dbeta[:, 0].T * X[j1, :]),
-                          np.sum(dbeta[:, 1].T * X[j1, :])])
+    n_samples = X.shape[0]
+    dF =np.array([ sign * np.sum(dbeta[:, 0].T * X[j1, :]),
+                           sign * np.sum(dbeta[:, 1].T * X[j1, :]) + epsilon])
     ddual_var_old = ddual_var[j2, :].copy()
     dzj = ddual_var[j2, :] - dF / L[j1]
     ddual_var[j2, :] = ind_box(zj, C) * dzj
-    ddual_var[j2, 0] += C * (C <= zj)
-    ddual_var[j2, 1] -= epsilon * ind_box(zj, C) / L[j1]
+    ddual_var[j2, 0] += C / n_samples * (C / n_samples <= zj)
     dbeta[:, 0] += sign * (ddual_var[j2, 0] -
                            ddual_var_old[0]) * X[j1, :]
     dbeta[:, 1] += sign * (ddual_var[j2, 1] -
@@ -26,10 +26,11 @@ def _compute_jac_aux(X, epsilon, dbeta, ddual_var, zj, L, C, j1, j2, sign):
 @njit
 def _update_beta_jac_bcd_aux(X, y, epsilon, beta, dbeta, dual_var, ddual_var,
                              L, C, j1, j2, sign, compute_jac):
+    n_samples = X.shape[0]
     F = sign * np.sum(beta * X[j1, :]) + epsilon - sign * y[j1]
     dual_var_old = dual_var[j2]
     zj = dual_var[j2] - F / L[j1]
-    dual_var[j2] = proj_box_svm(zj, C)
+    dual_var[j2] = proj_box_svm(zj, C / n_samples)
     beta += sign * ((dual_var[j2] - dual_var_old) * X[j1, :])
     if compute_jac:
         _compute_jac_aux(X, epsilon, dbeta, ddual_var, zj, L, C, j1, j2, sign)
@@ -45,12 +46,11 @@ def _compute_jac_aux_sparse(
     idx_nz = indices[indptr[j1]:indptr[j1+1]]
 
     dF = sign * np.array([np.sum(dbeta[idx_nz, 0].T * Xjs),
-                          np.sum(dbeta[idx_nz, 1].T * Xjs)])
+                          np.sum(dbeta[idx_nz, 1].T * Xjs) + epsilon])
     ddual_var_old = ddual_var[j2, :].copy()
     dzj = ddual_var[j2, :] - dF / L[j1]
     ddual_var[j2, :] = ind_box(zj, C) * dzj
     ddual_var[j2, 0] += C * (C <= zj)
-    ddual_var[j2, 1] -= epsilon * ind_box(zj, C) / L[j1]
     dbeta[idx_nz, 0] += sign * (ddual_var[j2, 0] -
                                 ddual_var_old[0]) * Xjs
     dbeta[idx_nz, 1] += sign * (ddual_var[j2, 1] -
@@ -106,6 +106,7 @@ class SimplexSVR(BaseModel):
     def _init_dbeta_ddual_var(self, X, y, dense0=None,
                               mask0=None, jac0=None, compute_jac=True):
         n_samples, n_features = X.shape
+        self.n_samples = n_samples
         ddual_var = np.zeros((2 * n_samples + n_features + 1, 2))
         if jac0 is None or not compute_jac or self.ddual_var is None:
             dbeta = np.zeros((n_features, 2))
@@ -245,13 +246,13 @@ class SimplexSVR(BaseModel):
                         dbeta[:, 1] -= (ddual_var_old[1] - ddual_var[-1, 1])
 
     def _get_pobj0(self, dual_var, beta, hyperparam, y):
-        obj_prim = hyperparam[0] * np.sum(np.maximum(
+        obj_prim = hyperparam[0] / self.n_samples * np.sum(np.maximum(
             np.abs(y) - hyperparam[1], 0))
         return obj_prim
 
     def _get_pobj(self, dual_var, X, beta, hyperparam, y):
         n_samples = X.shape[0]
-        obj_prim = 0.5 * norm(beta) ** 2 + hyperparam[0] * np.sum(np.maximum(
+        obj_prim = 0.5 * norm(beta) ** 2 + hyperparam[0] / n_samples * np.sum(np.maximum(
             np.abs(X @ beta - y) - hyperparam[1], 0))
         return obj_prim
     
@@ -301,12 +302,12 @@ class SimplexSVR(BaseModel):
         C = hyperparam[0]
         n_samples, n_features = X.shape
         sign = np.zeros(dual_var.shape[0])
-        bool_temp = dual_var[0:(2 * n_samples + n_features)] == 0.0
+        bool_temp = np.isclose(dual_var[0:(2 * n_samples + n_features)], 0.0)
         sign[0:(2 * n_samples + n_features)][bool_temp] = -1.0
-        sign[0:(2 * n_samples)][dual_var[0:(2 * n_samples)] == C] = 1.0
+        sign[0:(2 * n_samples)][np.isclose(dual_var[0:(2 * n_samples)], C / n_samples)] = 1.0
         ddual_var = np.zeros((2 * n_samples + n_features + 1, 2))
         if np.any(sign == 1.0):
-            ddual_var[sign == 1.0, 0] = np.repeat(C, (sign == 1).sum())
+            ddual_var[sign == 1.0, 0] = np.repeat(C / n_samples, (sign == 1).sum())
             ddual_var[sign == 1.0, 1] = np.repeat(0, (sign == 1).sum())
         self.ddual_var = ddual_var
         self.dbeta = X.T @ (
@@ -328,7 +329,7 @@ class SimplexSVR(BaseModel):
         gen_supp = np.zeros(length_dual)
         bool_temp = dual_var[0:(2 * n_samples + n_features)] == 0.0
         gen_supp[0:(2 * n_samples + n_features)][bool_temp] = -1.0
-        gen_supp[0:(2 * n_samples)][dual_var[0:(2 * n_samples)] == C] = 1.0
+        gen_supp[0:(2 * n_samples)][dual_var[0:(2 * n_samples)] == C / n_samples] = 1.0
         for j in np.arange(0, length_dual)[gen_supp == 0.0]:
             if j < (2 * n_samples):
                 if j < n_samples:
@@ -368,7 +369,7 @@ class SimplexSVR(BaseModel):
         gen_supp = np.zeros(dual_var.shape[0])
         bool_temp = dual_var[0:(2 * n_samples + n_features)] == 0.0
         gen_supp[0:(2 * n_samples + n_features)][bool_temp] = -1.0
-        gen_supp[0:(2 * n_samples)][dual_var[0:(2 * n_samples)] == C] = 1.0
+        gen_supp[0:(2 * n_samples)][dual_var[0:(2 * n_samples)] == C / n_samples] = 1.0
 
         iter = np.arange(0, (2 * n_samples + n_features + 1))[gen_supp == 0.0]
         for j in iter:
@@ -414,7 +415,7 @@ class SimplexSVR(BaseModel):
 
     @staticmethod
     def reduce_X(X, mask):
-        return X[:, mask]
+        return X
 
     @staticmethod
     def reduce_y(y, mask):
@@ -423,11 +424,11 @@ class SimplexSVR(BaseModel):
     def sign(self, x, log_hyperparams):
         sign = np.zeros(x.shape[0])
         sign[np.isclose(x, 0.0)] = -1.0
-        sign[np.isclose(x, np.exp(log_hyperparams[0]))] = 1.0
+        sign[np.isclose(x, np.exp(log_hyperparams[0]) / self.n_samples)] = 1.0
         return sign
 
     def get_jac_v(self, X, y, mask, dense, jac, v):
-        return jac.T @ v(mask, dense)
+        return jac[mask, :].T @ v(mask, dense)
 
     @staticmethod
     def get_full_jac_v(mask, jac_v, n_features):
@@ -443,7 +444,7 @@ class SimplexSVR(BaseModel):
         full_supp = np.logical_not(
             np.logical_or(
                 np.isclose(alpha, 0),
-                np.isclose(np.abs(alpha), C)))
+                np.isclose(np.abs(alpha), C / n_samples)))
         sub_id = np.zeros((mask0.sum(), n_features))
         sub_id[:, mask0] = 1.0
         hessian = np.concatenate((X[full_supp, :],
@@ -464,8 +465,11 @@ class SimplexSVR(BaseModel):
         n_features = X.shape[1]
         gamma = self.dual_var[(2 * n_samples):(2 * n_samples + n_features)]
         mask0 = np.logical_not(np.isclose(gamma, 0))
-        full_supp = np.logical_and(alpha != 0, np.abs(alpha) != C)
-        maskC = np.abs(alpha) == C
+        full_supp = np.logical_not(
+            np.logical_or(
+                np.isclose(alpha, 0),
+                np.isclose(np.abs(alpha), C / n_samples)))
+        maskC = np.isclose(np.abs(alpha), C / n_samples)
         sub_id = np.zeros((mask0.sum(), n_features))
         sub_id[:, mask0] = 1.0
 
@@ -486,7 +490,7 @@ class SimplexSVR(BaseModel):
         full_supp = np.logical_not(
             np.logical_or(
                 np.isclose(alpha, 0),
-                np.isclose(np.abs(alpha), C)))
+                np.isclose(np.abs(alpha), C / n_samples)))
         mask0 = np.logical_not(np.isclose(self.dual_var[(2 * n_samples):
                               (2 * n_samples + n_features)], 0))
         return v[np.hstack((full_supp, mask0, True))]
@@ -503,12 +507,12 @@ class SimplexSVR(BaseModel):
             ddual_var[n_samples:(2 * n_samples), 0]
         dgamma = ddual_var[(2 * n_samples):(2 * n_samples + n_features), 0]
         dmu = ddual_var[-1, 0]
-        maskC = np.abs(alpha) == C
+        maskC = np.isclose(np.abs(alpha), C / n_samples)
 
         full_supp = np.logical_not(
             np.logical_or(
                 np.isclose(alpha, 0),
-                np.isclose(np.abs(alpha), C)))
+                np.isclose(np.abs(alpha), C / n_samples)))
 
         vecX = dalpha[full_supp].T @ Xs[full_supp, :]
         vecX += dgamma + np.repeat(dmu, n_features)
