@@ -15,7 +15,7 @@ def _compute_jac_aux(X, epsilon, dbeta, ddual_var, zj, L, C, j1, j2, sign):
                            sign * np.sum(dbeta[:, 1].T * X[j1, :]) + epsilon])
     ddual_var_old = ddual_var[j2, :].copy()
     dzj = ddual_var[j2, :] - dF / L[j1]
-    ddual_var[j2, :] = ind_box(zj, C) * dzj
+    ddual_var[j2, :] = ind_box(zj, C / n_samples) * dzj
     ddual_var[j2, 0] += C / n_samples * (C / n_samples <= zj)
     dbeta[:, 0] += sign * (ddual_var[j2, 0] -
                            ddual_var_old[0]) * X[j1, :]
@@ -428,7 +428,7 @@ class SimplexSVR(BaseModel):
         return sign
 
     def get_jac_v(self, X, y, mask, dense, jac, v):
-        return jac[mask, :].T @ v(mask, dense)
+        return jac.T @ v(mask, dense)
 
     @staticmethod
     def get_full_jac_v(mask, jac_v, n_features):
